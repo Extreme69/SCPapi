@@ -63,7 +63,6 @@ scpRoutes.route('/SCPs').get(async function (req, res) {
     }
 });
 
-
 // Add a new SCP
 scpRoutes.route('/SCPs').post(async function (req, res) {
     console.log('POST request received at /SCPs');

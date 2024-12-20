@@ -2,20 +2,27 @@ const express = require('express');
 const scpTalesRoutes = express.Router();
 const dbo = require('../db/connection');
 
+// Helper function for DB connection check
+const checkDbConnection = (dbConnect, res) => {
+    if (!dbConnect) {
+        console.error('Database connection not established');
+        res.status(500).send('Database connection error');
+        return false;
+    }
+    return true;
+};
+
 // Get all SCPTales (with pagination), or filter by tale_id if provided
 scpTalesRoutes.route('/SCPTales').get(async function (req, res) {
     console.log('GET request received at /SCPTales');
 
     const dbConnect = dbo.getDb();
-    if (!dbConnect) {
-        console.error('Database connection not established');
-        return res.status(500).send('Database connection error');
-    }
+    if (!checkDbConnection(dbConnect, res)) return;
 
     try {
         const scpTaleId = req.query.tale_id;  // Get the tale_id from query parameters
         const page = parseInt(req.query.page) || 1;  // Get the page number, default to 1
-        const limit = 50;  // Number of results per page
+        const limit = parseInt(req.query.limit) || 50;  // Number of results per page
         const skip = (page - 1) * limit;  // Skip results from previous pages
         let scpTales;
 
@@ -50,7 +57,6 @@ scpTalesRoutes.route('/SCPTales').get(async function (req, res) {
         res.status(500).send('Error fetching SCPTales!');
     }
 });
-
 
 // Add a new Tale and update related SCP(s)
 scpTalesRoutes.route('/SCPTales').post(async function (req, res) {
