@@ -2,9 +2,9 @@ const express = require('express');
 const scpRoutes = express.Router();
 const dbo = require('../db/connection');
 
-// Get all SCPs (limit 50)
+// Get all SCPs (with pagination), or filter by series if provided
 scpRoutes.route('/SCPs').get(async function (req, res) {
-    console.log('GET request received at /SCPs'); 
+    console.log('GET request received at /SCPs');
 
     const dbConnect = dbo.getDb();
     if (!dbConnect) {
@@ -13,7 +13,12 @@ scpRoutes.route('/SCPs').get(async function (req, res) {
     }
 
     try {
-        const scpId = req.query.scp_id; // Get the scp_id from query parameters
+        const scpId = req.query.scp_id;  // Get the scp_id from query parameters
+        const series = req.query.series;  // Get the series from query parameters
+        const page = parseInt(req.query.page) || 1;  // Get the page number, default to 1
+        const limit = 50;  // Number of results per page
+        const skip = (page - 1) * limit;  // Skip results from previous pages
+
         let SCPs;
 
         if (scpId) {
@@ -28,13 +33,26 @@ scpRoutes.route('/SCPs').get(async function (req, res) {
                 // If no results are found, return a 404 error with a message
                 return res.status(404).send(`SCP with scp_id ${scpId} not found.`);
             }
+        } else if (series) {
+            // If series is provided, filter SCPs by the series and paginate
+            SCPs = await dbConnect
+                .collection('SCPs')
+                .find({ series: series })
+                .skip(skip)  // Skip to the correct page
+                .limit(limit)  // Limit to 50 results per page
+                .toArray();
         } else {
-            // If no scp_id is provided, fetch the first 50 SCPs
+            // If no filters are provided, fetch the first 50 SCPs (paginated)
             SCPs = await dbConnect
                 .collection('SCPs')
                 .find({})
-                .limit(50)
+                .skip(skip)  // Skip to the correct page
+                .limit(limit)  // Limit to 50 results per page
                 .toArray();
+        }
+
+        if (SCPs.length === 0) {
+            return res.status(404).send('No SCPs found.');
         }
 
         console.log('Successfully fetched SCPs');
@@ -44,6 +62,7 @@ scpRoutes.route('/SCPs').get(async function (req, res) {
         res.status(500).send('Error fetching SCPs!');
     }
 });
+
 
 // Add a new SCP
 scpRoutes.route('/SCPs').post(async function (req, res) {
