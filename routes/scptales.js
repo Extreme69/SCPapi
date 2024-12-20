@@ -40,6 +40,16 @@ scpTalesRoutes.route('/SCPTales').get(async function (req, res) {
         const skip = (page - 1) * limit;  // Skip results from previous pages
         let scpTales;
 
+        // Validate page number
+        if (page < 1) {
+            return res.status(400).json({ error: 'Page number must be 1 or greater.' });
+        }
+
+        // Validate limit
+        if (limit < 1) {
+            return res.status(400).json({ error: 'Limit must be 1 or greater.' });
+        }
+
         if (scpTaleId) {
             // If tale_id is provided, find the specific SCPTale by its tale_id
             scpTales = await dbConnect.collection('SCPTales').findOne({ tale_id: scpTaleId });

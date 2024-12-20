@@ -2,61 +2,66 @@ const express = require('express');
 const scpRoutes = express.Router();
 const dbo = require('../db/connection');
 
+// Helper function for DB connection check
+const checkDbConnection = (dbConnect, res) => {
+    if (!dbConnect) {
+        console.error('Database connection not established');
+        res.status(500).send('Database connection error');
+        return false;
+    }
+    return true;
+};
+
 // Get all SCPs (with pagination), or filter by series if provided
 scpRoutes.route('/SCPs').get(async function (req, res) {
     console.log('GET request received at /SCPs');
 
     const dbConnect = dbo.getDb();
-    if (!dbConnect) {
-        console.error('Database connection not established');
-        return res.status(500).send('Database connection error');
-    }
+    if (!checkDbConnection(dbConnect, res)) return;
 
     try {
-        const scpId = req.query.scp_id;  // Get the scp_id from query parameters
-        const series = req.query.series;  // Get the series from query parameters
-        const page = parseInt(req.query.page) || 1;  // Get the page number, default to 1
-        const limit = 50;  // Number of results per page
-        const skip = (page - 1) * limit;  // Skip results from previous pages
+        const scpId = req.query.scp_id; // Get the scp_id from query parameters
+        const series = req.query.series; // Get the series from query parameters
+        const page = parseInt(req.query.page) || 1; // Get the page number, default to 1
+        const limit = parseInt(req.query.limit) || 50; // Get the limit from query parameters, default to 50
+        const skip = (page - 1) * limit; // Skip results from previous pages
 
-        let SCPs;
-
-        if (scpId) {
-            // If scp_id is provided, find the specific SCP by its scp_id
-            SCPs = await dbConnect
-                .collection('SCPs')
-                .find({ scp_id: scpId })
-                .limit(1)  // Limiting to 1 result
-                .toArray();
-
-            if (SCPs.length === 0) {
-                // If no results are found, return a 404 error with a message
-                return res.status(404).send(`SCP with scp_id ${scpId} not found.`);
-            }
-        } else if (series) {
-            // If series is provided, filter SCPs by the series and paginate
-            SCPs = await dbConnect
-                .collection('SCPs')
-                .find({ series: series })
-                .skip(skip)  // Skip to the correct page
-                .limit(limit)  // Limit to 50 results per page
-                .toArray();
-        } else {
-            // If no filters are provided, fetch the first 50 SCPs (paginated)
-            SCPs = await dbConnect
-                .collection('SCPs')
-                .find({})
-                .skip(skip)  // Skip to the correct page
-                .limit(limit)  // Limit to 50 results per page
-                .toArray();
+        // Validate page number
+        if (page < 1) {
+            return res.status(400).json({ error: 'Page number must be 1 or greater.' });
         }
 
-        if (SCPs.length === 0) {
-            return res.status(404).send('No SCPs found.');
+        // Validate limit
+        if (limit < 1) {
+            return res.status(400).json({ error: 'Limit must be 1 or greater.' });
         }
+
+        const query = {};
+        if (scpId) query.scp_id = scpId;
+        if (series) query.series = series;
+
+        // Get total count for pagination metadata
+        const total = await dbConnect.collection('SCPs').countDocuments(query);
+        if (total === 0) {
+            return res.status(404).json({ error: 'No SCPs found for the given criteria.' });
+        }
+
+        const totalPages = Math.ceil(total / limit);
+
+        // Fetch SCPs
+        const SCPs = await dbConnect
+            .collection('SCPs')
+            .find(query)
+            .skip(skip)
+            .limit(limit)
+            .toArray();
 
         console.log('Successfully fetched SCPs');
-        res.json(SCPs);
+        res.json({
+            totalPages,
+            currentPage: page,
+            data: SCPs,
+        });
     } catch (err) {
         console.error('Error fetching SCPs:', err);
         res.status(500).send('Error fetching SCPs!');
@@ -68,10 +73,7 @@ scpRoutes.route('/SCPs').post(async function (req, res) {
     console.log('POST request received at /SCPs');
 
     const dbConnect = dbo.getDb();
-    if (!dbConnect) {
-        console.error('Database connection not established');
-        return res.status(500).send('Database connection error');
-    }
+    if (!checkDbConnection(dbConnect, res)) return;
 
     const newSCP = req.body; // Get the new SCP data from the request body
 
@@ -99,10 +101,7 @@ scpRoutes.route('/SCPs/:scp_id').delete(async function (req, res) {
     console.log('DELETE request received at /SCPs/:scp_id');
 
     const dbConnect = dbo.getDb();
-    if (!dbConnect) {
-        console.error('Database connection not established');
-        return res.status(500).send('Database connection error');
-    }
+    if (!checkDbConnection(dbConnect, res)) return;
 
     const { scp_id } = req.params;  // Get the scp_id from the URL parameters
 
@@ -130,10 +129,7 @@ scpRoutes.route('/SCPs/:scp_id').put(async function (req, res) {
     console.log('PUT request received at /SCPs/:scp_id');
 
     const dbConnect = dbo.getDb();
-    if (!dbConnect) {
-        console.error('Database connection not established');
-        return res.status(500).send('Database connection error');
-    }
+    if (!checkDbConnection(dbConnect, res)) return;
 
     const { scp_id } = req.params;  // Get the scp_id from the URL parameters
     const updatedSCP = req.body;    // Get the updated SCP data from the request body
