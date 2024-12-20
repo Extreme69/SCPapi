@@ -50,8 +50,10 @@ scpTalesRoutes.route('/SCPTales').get(async function (req, res) {
             return res.status(404).send('No SCPTales found.');
         }
 
-        console.log('Successfully fetched SCPTales');
-        res.json(scpTales);
+        const totalCount = await dbConnect.collection('SCPTales').countDocuments();
+        const totalPages = Math.ceil(totalCount / limit);
+
+        res.json({ totalPages, currentPage: page, data: scpTales });
     } catch (err) {
         console.error('Error fetching SCPTales:', err);
         res.status(500).send('Error fetching SCPTales!');
@@ -61,10 +63,7 @@ scpTalesRoutes.route('/SCPTales').get(async function (req, res) {
 // Add a new Tale and update related SCP(s)
 scpTalesRoutes.route('/SCPTales').post(async function (req, res) {
     const dbConnect = dbo.getDb();
-    if (!dbConnect) {
-        console.error('Database connection not established');
-        return res.status(500).send('Database connection error');
-    }
+    if (!checkDbConnection(dbConnect, res)) return;
 
     try {
         const { tale_id, title, content, scp_id, rating, url } = req.body;
@@ -117,10 +116,7 @@ scpTalesRoutes.route('/SCPTales/:tale_id').delete(async function (req, res) {
     console.log('DELETE request received at /SCPTales/:tale_id');
 
     const dbConnect = dbo.getDb();
-    if (!dbConnect) {
-        console.error('Database connection not established');
-        return res.status(500).send('Database connection error');
-    }
+    if (!checkDbConnection(dbConnect, res)) return;
 
     const { tale_id } = req.params; // Get the tale_id from the URL parameters
 
@@ -159,10 +155,7 @@ scpTalesRoutes.route('/SCPTales/:tale_id').put(async function (req, res) {
     console.log('PUT request received at /SCPTales/:tale_id');
 
     const dbConnect = dbo.getDb();
-    if (!dbConnect) {
-        console.error('Database connection not established');
-        return res.status(500).send('Database connection error');
-    }
+    if (!checkDbConnection(dbConnect, res)) return;
 
     const { tale_id } = req.params; // Get the tale_id from the URL parameters
     const updatedFields = req.body;  // Get the updated fields from the request body
