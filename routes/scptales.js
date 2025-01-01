@@ -27,6 +27,7 @@ const validateScpIds = async (dbConnect, scpIds) => {
 };
 
 // Get all SCPTales (with pagination), or filter by tale_id if provided
+// Get all SCPTales (with pagination and search), or filter by tale_id if provided
 scpTalesRoutes.route('/SCPTales').get(async function (req, res) {
     console.log('GET request received at /SCPTales');
 
@@ -35,6 +36,7 @@ scpTalesRoutes.route('/SCPTales').get(async function (req, res) {
 
     try {
         const scpTaleId = req.query.tale_id;  // Get the tale_id from query parameters
+        const search = req.query.search;  // Get the search term from query parameters
         const page = parseInt(req.query.page) || 1;  // Get the page number, default to 1
         const limit = parseInt(req.query.limit) || 50;  // Number of results per page, default to 50
         const skip = (page - 1) * limit;  // Skip results from previous pages
@@ -50,24 +52,32 @@ scpTalesRoutes.route('/SCPTales').get(async function (req, res) {
             return res.status(400).json({ error: 'Limit must be 1 or greater.' });
         }
 
+        const query = {};
+
         if (scpTaleId) {
             // If tale_id is provided, find the specific SCPTale by its tale_id
-            scpTales = await dbConnect.collection('SCPTales').findOne({ tale_id: scpTaleId });
-
-            if (!scpTales) {
-                return res.status(404).send(`Tale with tale_id ${scpTaleId} not found.`);
-            }
-        } else {
-            // If no tale_id is provided, fetch SCPTales with pagination
-            scpTales = await dbConnect.collection('SCPTales')
-                .find({})
-                .skip(skip)
-                .limit(limit)
-                .toArray();
+            query.tale_id = scpTaleId;
         }
 
-        const totalCount = await dbConnect.collection('SCPTales').countDocuments();
+        // Add text search if the search query is provided
+        if (search) {
+            query.$text = { $search: search };  // MongoDB text search
+        }
+
+        // Fetch total count for pagination metadata
+        const totalCount = await dbConnect.collection('SCPTales').countDocuments(query);
+        if (totalCount === 0) {
+            return res.status(404).send(`No SCPTales found for the given criteria.`);
+        }
+
         const totalPages = Math.ceil(totalCount / limit);
+
+        // Fetch SCPTales with pagination and search
+        scpTales = await dbConnect.collection('SCPTales')
+            .find(query)
+            .skip(skip)
+            .limit(limit)
+            .toArray();
 
         res.json({ totalPages, currentPage: page, data: scpTales });
     } catch (err) {
