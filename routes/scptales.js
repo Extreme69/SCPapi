@@ -107,21 +107,25 @@ scpTalesRoutes.route('/SCPTales').post(async function (req, res) {
         // 2. Insert the new tale
         const tale = { title, content, scp_id, rating, url };
         const insertedTale = await dbConnect.collection('SCPTales').insertOne(tale);
-
-        // 3. Update the related SCP(s)
-        for (let scp of scp_id) {
-            await dbConnect.collection('SCPs').updateOne(
-                { scp_id: scp },
-                {
-                    $addToSet: { scp_tales: insertedTale.insertedId }
-                }
-            );
+        
+        try{
+            // 3. Update the related SCP(s)
+            for (let scp of scp_id) {
+                await dbConnect.collection('SCPs').updateOne(
+                    { scp_id: scp },
+                    { $addToSet: { scp_tales: insertedTale.insertedId.toString() } }
+                );
+            }
+        } catch (error){
+            console.error('Error updating SCP(s):', error);
+            return res.status(500).send('Error updating SCP(s)');
         }
+
 
         console.log(`Successfully added Tale with ID: ${insertedTale.insertedId}`);
         res.status(201).send(`Tale added successfully with ID: ${insertedTale.insertedId}`);
     } catch (error) {
-        console.error('Error adding Tale with id: and updating SCP(s):', error);
+        console.error('Error adding Tale with and updating SCP(s):', error);
         res.status(500).send('Error adding Tale and updating SCP(s)');
     }
 });
