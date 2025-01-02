@@ -1,6 +1,7 @@
 const express = require('express');
 const scpTalesRoutes = express.Router();
 const dbo = require('../db/connection');
+const { ObjectId } = require('mongodb');
 
 // Helper function for DB connection check
 const checkDbConnection = (dbConnect, res) => {
@@ -26,8 +27,7 @@ const validateScpIds = async (dbConnect, scpIds) => {
     return missingScps;
 };
 
-// Get all SCPTales (with pagination), or filter by tale_id if provided
-// Get all SCPTales (with pagination and search), or filter by tale_id if provided
+// Get all SCPTales (with pagination and search), or filter by _id if provided
 scpTalesRoutes.route('/SCPTales').get(async function (req, res) {
     console.log('GET request received at /SCPTales');
 
@@ -35,7 +35,7 @@ scpTalesRoutes.route('/SCPTales').get(async function (req, res) {
     if (!checkDbConnection(dbConnect, res)) return;
 
     try {
-        const scpTaleId = req.query.tale_id;  // Get the tale_id from query parameters
+        const scpTaleId = req.query._id;  // Get the _id from query parameters
         const search = req.query.search;  // Get the search term from query parameters
         const page = parseInt(req.query.page) || 1;  // Get the page number, default to 1
         const limit = parseInt(req.query.limit) || 50;  // Number of results per page, default to 50
@@ -55,8 +55,12 @@ scpTalesRoutes.route('/SCPTales').get(async function (req, res) {
         const query = {};
 
         if (scpTaleId) {
-            // If tale_id is provided, find the specific SCPTale by its tale_id
-            query.tale_id = scpTaleId;
+            // If _id is provided, find the specific SCPTale by its _id
+            try {
+                query._id = new ObjectId(scpTaleId);  // Convert _id to ObjectId
+            } catch (error) {
+                return res.status(400).json({ error: 'Invalid ObjectId format for _id.' });
+            }
         }
 
         // Add text search if the search query is provided
@@ -92,7 +96,7 @@ scpTalesRoutes.route('/SCPTales').post(async function (req, res) {
     if (!checkDbConnection(dbConnect, res)) return;
 
     try {
-        const { tale_id, title, content, scp_id, rating, url } = req.body;
+        const { title, content, scp_id, rating, url } = req.body;
 
         // 1. Check if all SCPs exist
         const missingScps = await validateScpIds(dbConnect, scp_id);
@@ -101,7 +105,7 @@ scpTalesRoutes.route('/SCPTales').post(async function (req, res) {
         }
 
         // 2. Insert the new tale
-        const tale = { tale_id, title, content, scp_id, rating, url };
+        const tale = { title, content, scp_id, rating, url };
         const insertedTale = await dbConnect.collection('SCPTales').insertOne(tale);
 
         // 3. Update the related SCP(s)
@@ -109,59 +113,62 @@ scpTalesRoutes.route('/SCPTales').post(async function (req, res) {
             await dbConnect.collection('SCPs').updateOne(
                 { scp_id: scp },
                 {
-                    $addToSet: { scp_tales: tale_id }
+                    $addToSet: { scp_tales: insertedTale.insertedId }
                 }
             );
         }
 
-        console.log(`Successfully added Tale with ID: ${tale_id}`);
-        res.status(201).send(`Tale added successfully with ID: ${tale_id}`);
+        console.log(`Successfully added Tale with ID: ${insertedTale.insertedId}`);
+        res.status(201).send(`Tale added successfully with ID: ${insertedTale.insertedId}`);
     } catch (error) {
-        console.error('Error adding Tale and updating SCP(s):', error);
+        console.error('Error adding Tale with id: and updating SCP(s):', error);
         res.status(500).send('Error adding Tale and updating SCP(s)');
     }
 });
 
-// Delete a Tale by tale_id
-scpTalesRoutes.route('/SCPTales/:tale_id').delete(async function (req, res) {
-    console.log('DELETE request received at /SCPTales/:tale_id');
+// Delete a Tale by _id
+scpTalesRoutes.route('/SCPTales/:id').delete(async function (req, res) {
+    console.log('DELETE request received at /SCPTales/:id');
 
     const dbConnect = dbo.getDb();
     if (!checkDbConnection(dbConnect, res)) return;
 
-    const { tale_id } = req.params;
+    const { id } = req.params; // Get the _id from the request parameters
 
     try {
-        // Find and delete the Tale
-        const tale = await dbConnect.collection('SCPTales').findOne({ tale_id: tale_id });
-        if (!tale) return res.status(404).send(`Tale with tale_id ${tale_id} not found.`);
+        // Convert the id to ObjectId type
+        const objectId = new ObjectId(id);
 
-        await dbConnect.collection('SCPTales').deleteOne({ tale_id: tale_id });
+        // Find and delete the Tale
+        const tale = await dbConnect.collection('SCPTales').findOne({ _id: objectId });
+        if (!tale) return res.status(404).send(`Tale with _id ${id} not found.`);
+
+        await dbConnect.collection('SCPTales').deleteOne({ _id: objectId });
 
         // Remove the tale reference from related SCPs
         for (let scp of tale.scp_id) {
             await dbConnect.collection('SCPs').updateOne(
                 { scp_id: scp },
-                { $pull: { scp_tales: tale_id } }
+                { $pull: { scp_tales: objectId } } // Use ObjectId here instead of tale_id
             );
         }
 
-        console.log(`Successfully deleted Tale with tale_id ${tale_id}`);
-        res.status(200).send(`Tale with tale_id ${tale_id} deleted successfully!`);
+        console.log(`Successfully deleted Tale with _id ${id}`);
+        res.status(200).send(`Tale with _id ${id} deleted successfully!`);
     } catch (err) {
         console.error('Error deleting Tale:', err);
         res.status(500).send('Error deleting Tale!');
     }
 });
 
-// Update a Tale by tale_id (Partial Update)
-scpTalesRoutes.route('/SCPTales/:tale_id').put(async function (req, res) {
-    console.log('PUT request received at /SCPTales/:tale_id');
+// Update a Tale by _id (Partial Update)
+scpTalesRoutes.route('/SCPTales/:id').put(async function (req, res) {
+    console.log('PUT request received at /SCPTales/:id');
 
     const dbConnect = dbo.getDb();
     if (!checkDbConnection(dbConnect, res)) return;
 
-    const { tale_id } = req.params;
+    const { id } = req.params;  // Get the _id from request parameters
     const updatedFields = req.body;
 
     if (Object.keys(updatedFields).length === 0) {
@@ -169,11 +176,15 @@ scpTalesRoutes.route('/SCPTales/:tale_id').put(async function (req, res) {
     }
 
     try {
-        const existingTale = await dbConnect.collection('SCPTales').findOne({ tale_id: tale_id });
-        if (!existingTale) return res.status(404).send(`Tale with tale_id ${tale_id} not found.`);
+        // Convert the id to ObjectId type
+        const objectId = new ObjectId(id);
 
+        const existingTale = await dbConnect.collection('SCPTales').findOne({ _id: objectId });
+        if (!existingTale) return res.status(404).send(`Tale with _id ${id} not found.`);
+
+        // Update the Tale document
         await dbConnect.collection('SCPTales').updateOne(
-            { tale_id: tale_id },
+            { _id: objectId },
             { $set: updatedFields }
         );
 
@@ -185,20 +196,20 @@ scpTalesRoutes.route('/SCPTales/:tale_id').put(async function (req, res) {
             for (let scp of removedScps) {
                 await dbConnect.collection('SCPs').updateOne(
                     { scp_id: scp },
-                    { $pull: { scp_tales: tale_id } }
+                    { $pull: { scp_tales: objectId } }  // Use ObjectId here
                 );
             }
 
             for (let scp of addedScps) {
                 await dbConnect.collection('SCPs').updateOne(
                     { scp_id: scp },
-                    { $addToSet: { scp_tales: tale_id } }
+                    { $addToSet: { scp_tales: objectId } }  // Use ObjectId here
                 );
             }
         }
 
-        console.log(`Successfully updated Tale with tale_id ${tale_id}`);
-        res.status(200).send(`Tale with tale_id ${tale_id} updated successfully!`);
+        console.log(`Successfully updated Tale with _id ${id}`);
+        res.status(200).send(`Tale with _id ${id} updated successfully!`);
     } catch (err) {
         console.error('Error updating Tale:', err);
         res.status(500).send('Error updating Tale!');
