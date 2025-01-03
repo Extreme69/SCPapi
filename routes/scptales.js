@@ -153,7 +153,7 @@ scpTalesRoutes.route('/SCPTales/:id').delete(async function (req, res) {
         for (let scp of tale.scp_id) {
             await dbConnect.collection('SCPs').updateOne(
                 { scp_id: scp },
-                { $pull: { scp_tales: objectId } } // Use ObjectId here instead of tale_id
+                { $pull: { scp_tales: objectId.toString() } } // Use ObjectId here instead of tale_id
             );
         }
 
@@ -200,14 +200,14 @@ scpTalesRoutes.route('/SCPTales/:id').put(async function (req, res) {
             for (let scp of removedScps) {
                 await dbConnect.collection('SCPs').updateOne(
                     { scp_id: scp },
-                    { $pull: { scp_tales: objectId } }  // Use ObjectId here
+                    { $pull: { scp_tales: objectId.toString() } }  // Use ObjectId here
                 );
             }
 
             for (let scp of addedScps) {
                 await dbConnect.collection('SCPs').updateOne(
                     { scp_id: scp },
-                    { $addToSet: { scp_tales: objectId } }  // Use ObjectId here
+                    { $addToSet: { scp_tales: objectId.toString() } }  // Use ObjectId here
                 );
             }
         }
