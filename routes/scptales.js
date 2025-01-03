@@ -186,7 +186,17 @@ scpTalesRoutes.route('/SCPTales/:id').put(async function (req, res) {
         const existingTale = await dbConnect.collection('SCPTales').findOne({ _id: objectId });
         if (!existingTale) return res.status(404).send(`Tale with _id ${id} not found.`);
 
-        // Update the Tale document
+        // Validate SCP IDs before making any changes
+        if (updatedFields.scp_id) {
+            const missingScps = await validateScpIds(dbConnect, updatedFields.scp_id);
+            if (missingScps.length > 0) {
+                return res.status(400).send(
+                    `Cannot update Tale: the following SCP IDs do not exist: ${missingScps.join(', ')}`
+                );
+            }
+        }
+
+        // Proceed with the update since all SCP IDs are valid
         await dbConnect.collection('SCPTales').updateOne(
             { _id: objectId },
             { $set: updatedFields }
@@ -200,14 +210,14 @@ scpTalesRoutes.route('/SCPTales/:id').put(async function (req, res) {
             for (let scp of removedScps) {
                 await dbConnect.collection('SCPs').updateOne(
                     { scp_id: scp },
-                    { $pull: { scp_tales: objectId.toString() } }  // Use ObjectId here
+                    { $pull: { scp_tales: objectId.toString() } }
                 );
             }
 
             for (let scp of addedScps) {
                 await dbConnect.collection('SCPs').updateOne(
                     { scp_id: scp },
-                    { $addToSet: { scp_tales: objectId.toString() } }  // Use ObjectId here
+                    { $addToSet: { scp_tales: objectId.toString() } }
                 );
             }
         }
