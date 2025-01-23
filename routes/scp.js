@@ -145,8 +145,18 @@ scpRoutes.route('/SCPs/:scp_id').put(async function (req, res) {
         }
 
         const updateFields = {};
-        for (const key of ['scp_id', 'title', 'description', 'classification', 'rating', 'url', 'series', 'photo_url']) {
-            if (updatedSCP[key]) updateFields[key] = updatedSCP[key];
+        for (const key of [
+            'scp_id',
+            'title',
+            'description',
+            'classification',
+            'rating',
+            'url',
+            'series',
+            'photo_url',
+            'creator' // Include the 'creator' field
+        ]) {
+            if (updatedSCP[key] !== undefined) updateFields[key] = updatedSCP[key];
         }
 
         const result = await dbConnect
